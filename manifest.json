@@ -1,0 +1,25 @@
+{
+  "name": "Blood Donation App",
+  "short_name": "BloodDonate",
+  "description": "Find blood donors, log donations, and request blood in emergencies.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#fdf2f2",
+  "theme_color": "#b30000",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

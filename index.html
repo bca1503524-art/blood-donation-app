@@ -1,0 +1,894 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Blood Donation App</title>
+<meta name="theme-color" content="#b30000">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<style>
+:root {
+    --red: #b30000;
+    --red-dark: #8a0000;
+    --bg: #fdf2f2;
+}
+
+* { box-sizing: border-box; }
+
+body {
+    font-family: Arial, sans-serif;
+    background-color: var(--bg);
+    margin: 0;
+    padding: 0;
+    padding-bottom: 20px;
+}
+
+.navbar {
+    background-color: var(--red);
+    padding: 14px 18px;
+    color: white;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.navbar .links a, .navbar .links button {
+    color: white;
+    text-decoration: none;
+    margin-left: 12px;
+    font-weight: bold;
+    background: none;
+    border: none;
+    font-size: 14px;
+    cursor: pointer;
+    padding: 0;
+}
+
+.container {
+    max-width: 480px;
+    margin: 24px auto;
+    background: white;
+    padding: 24px;
+    border-radius: 8px;
+    box-shadow: 0 0 10px rgba(0,0,0,0.1);
+}
+
+.container.wide { max-width: 800px; }
+
+h2 { color: var(--red); text-align: center; margin-top: 0; }
+h3 { color: var(--red-dark); }
+
+input, select, button {
+    width: 100%;
+    padding: 10px;
+    margin: 8px 0;
+    box-sizing: border-box;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 15px;
+}
+
+button {
+    background-color: var(--red);
+    color: white;
+    border: none;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+button:hover { background-color: var(--red-dark); }
+
+button.secondary { background-color: #555; }
+button.link-btn { background:none; color: var(--red); text-decoration: underline; width:auto; padding:4px; }
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 16px;
+    font-size: 14px;
+}
+
+table, th, td { border: 1px solid #ddd; }
+th, td { padding: 8px; text-align: left; }
+th { background-color: var(--red); color: white; }
+
+.available { color: green; font-weight: bold; }
+.not-available { color: #b30000; font-weight: bold; }
+.priority { background: #fff3cd; }
+
+.status-pending { color: #cc8b00; font-weight:bold; }
+.status-approved { color: #0066cc; font-weight:bold; }
+.status-fulfilled { color: green; font-weight:bold; }
+
+.message { text-align: center; padding: 10px; margin-bottom: 10px; border-radius: 4px; }
+.success { background-color: #d4edda; color: #155724; }
+.error { background-color: #f8d7da; color: #721c24; }
+
+.hidden { display: none; }
+
+.muted { color: #777; font-size: 13px; text-align:center; }
+
+.install-banner {
+    background: #fff3cd;
+    color: #664d03;
+    padding: 10px 16px;
+    text-align: center;
+    font-size: 14px;
+}
+.install-banner button { width: auto; display:inline-block; margin-left: 10px; padding: 6px 14px; }
+
+</style>
+</head>
+<body>
+
+<div id="install-banner" class="install-banner hidden">
+    📲 Install this app on your device for quick access.
+    <button id="install-btn">Install</button>
+</div>
+
+<div class="navbar">
+    <div><strong>🩸 Blood Donation App</strong></div>
+    <div id="navbar-links" class="links"></div>
+</div>
+
+<!-- ============ HOME ============ -->
+<div id="view-home" class="view">
+    <div class="container">
+        <h2>Welcome</h2>
+        <p style="text-align:center;">Register as a donor to save lives, or search for donors and request blood when you need it.</p>
+        <button onclick="showView('view-donor-register')">Become a Donor</button>
+        <button onclick="showView('view-recipient-register')">Register as Recipient</button>
+        <button class="secondary" onclick="showView('view-guest-request')">Quick Request (Guest)</button>
+    </div>
+</div>
+
+<!-- ============ DONOR REGISTER ============ -->
+<div id="view-donor-register" class="view hidden">
+    <div class="container">
+        <h2>Donor Registration</h2>
+        <div id="donor-register-msg"></div>
+        <form onsubmit="registerDonor(event)">
+            <input type="text" name="name" placeholder="Full Name" required>
+            <input type="email" name="email" placeholder="Email" required>
+            <input type="password" name="password" placeholder="Password" required>
+            <select name="blood_group" required>
+                <option value="">Select Blood Group</option>
+                <option>A+</option><option>A-</option><option>B+</option><option>B-</option>
+                <option>AB+</option><option>AB-</option><option>O+</option><option>O-</option>
+            </select>
+            <input type="text" name="city" placeholder="City" required>
+            <input type="text" name="phone" placeholder="Phone Number" required>
+            <button type="submit">Register</button>
+        </form>
+        <p class="muted"><a href="#" onclick="showView('view-login')">Already have an account? Login</a></p>
+    </div>
+</div>
+
+<!-- ============ RECIPIENT REGISTER ============ -->
+<div id="view-recipient-register" class="view hidden">
+    <div class="container">
+        <h2>Register as Recipient</h2>
+        <p class="muted">Create an account to submit blood requests and track their status.</p>
+        <div id="recipient-register-msg"></div>
+        <form onsubmit="registerRecipient(event)">
+            <input type="text" name="name" placeholder="Full Name" required>
+            <input type="email" name="email" placeholder="Email" required>
+            <input type="password" name="password" placeholder="Password" required>
+            <button type="submit">Register</button>
+        </form>
+        <p class="muted"><a href="#" onclick="showView('view-login')">Already have an account? Login</a></p>
+    </div>
+</div>
+
+<!-- ============ LOGIN ============ -->
+<div id="view-login" class="view hidden">
+    <div class="container">
+        <h2>Login</h2>
+        <div id="login-msg"></div>
+        <form onsubmit="login(event)">
+            <input type="email" name="email" placeholder="Email" required>
+            <input type="password" name="password" placeholder="Password" required>
+            <button type="submit">Login</button>
+        </form>
+        <p class="muted">Test logins: admin@bloodapp.com / admin123, ravi@mail.com / ravi123, amit@mail.com / amit123</p>
+    </div>
+</div>
+
+<!-- ============ GUEST REQUEST ============ -->
+<div id="view-guest-request" class="view hidden">
+    <div class="container">
+        <h2>Quick Request (Guest)</h2>
+        <p class="muted">For emergencies - no account needed. Want tracking + priority? <a href="#" onclick="showView('view-recipient-register')">Create a free account</a> instead.</p>
+        <div id="guest-request-msg"></div>
+        <form onsubmit="submitGuestRequest(event)">
+            <input type="text" name="name" placeholder="Your Name" required>
+            <input type="text" name="phone" placeholder="Phone Number" required>
+            <select name="blood_group" required>
+                <option value="">Select Blood Group Needed</option>
+                <option>A+</option><option>A-</option><option>B+</option><option>B-</option>
+                <option>AB+</option><option>AB-</option><option>O+</option><option>O-</option>
+            </select>
+            <input type="text" name="city" placeholder="City" required>
+            <button type="submit">Submit Request</button>
+        </form>
+    </div>
+</div>
+
+<!-- ============ SEARCH DONORS ============ -->
+<div id="view-search" class="view hidden">
+    <div class="container wide">
+        <h2>Search Available Donors</h2>
+        <form onsubmit="handleSearchForm(event)">
+            <select name="blood_group">
+                <option value="">All Blood Groups</option>
+                <option>A+</option><option>A-</option><option>B+</option><option>B-</option>
+                <option>AB+</option><option>AB-</option><option>O+</option><option>O-</option>
+            </select>
+            <input type="text" name="city" placeholder="City">
+            <button type="submit">Search</button>
+        </form>
+        <div id="search-results"></div>
+    </div>
+</div>
+
+<!-- ============ DONOR DASHBOARD ============ -->
+<div id="view-donor-dashboard" class="view hidden">
+    <div class="container">
+        <h2>My Donor Dashboard</h2>
+        <div id="donor-dash-msg"></div>
+        <div id="donor-info"></div>
+
+        <div id="log-donation-form">
+            <h3>Log a New Donation</h3>
+            <form onsubmit="logDonation(event)">
+                <input type="text" name="location" placeholder="Donation Location (e.g. City Hospital)" required>
+                <button type="submit">Save Donation</button>
+            </form>
+        </div>
+
+        <h3>My Donation History</h3>
+        <div id="donation-history"></div>
+    </div>
+</div>
+
+<!-- ============ RECIPIENT DASHBOARD ============ -->
+<div id="view-recipient-dashboard" class="view hidden">
+    <div class="container">
+        <h2>Request Blood</h2>
+        <div id="recipient-dash-msg"></div>
+        <form onsubmit="submitRequest(event)">
+            <input type="text" name="phone" placeholder="Contact Phone Number" required>
+            <select name="blood_group" required>
+                <option value="">Select Blood Group Needed</option>
+                <option>A+</option><option>A-</option><option>B+</option><option>B-</option>
+                <option>AB+</option><option>AB-</option><option>O+</option><option>O-</option>
+            </select>
+            <input type="text" name="city" placeholder="City" required>
+            <input type="email" name="related_donor_email" placeholder="Donor family member's email (optional, for priority)">
+            <button type="submit">Submit Request</button>
+        </form>
+        <h3>My Requests</h3>
+        <div id="my-requests"></div>
+    </div>
+</div>
+
+<!-- ============ ADMIN DASHBOARD ============ -->
+<div id="view-admin-dashboard" class="view hidden">
+    <div class="container wide">
+        <h2>Admin Dashboard</h2>
+        <div id="admin-stats"></div>
+        <h3>Donations Awaiting Verification</h3>
+        <div id="pending-donations"></div>
+        <h3>All Blood Requests</h3>
+        <div id="all-requests"></div>
+    </div>
+</div>
+
+<!-- ============ REPORTS ============ -->
+<div id="view-reports" class="view hidden">
+    <div class="container wide">
+        <h2>System Reports</h2>
+        <h3>Overview</h3>
+        <div id="report-overview"></div>
+        <h3>Requests by Status</h3>
+        <div id="report-requests"></div>
+        <h3>Top 5 Donors (Loyalty Leaderboard)</h3>
+        <div id="report-leaderboard"></div>
+        <h3>Most Requested Blood Groups</h3>
+        <div id="report-demand"></div>
+    </div>
+</div>
+
+<script>
+/* ===================================================================
+   BLOOD DONATION APP - Core Logic
+   Data is stored in the browser's localStorage, acting as our "database".
+   No PHP / MySQL needed - this runs entirely on the device.
+   =================================================================== */
+
+const DB_KEY = "bloodAppDB";
+
+// ---------- DATABASE HELPERS ----------
+
+function getDB() {
+    const raw = localStorage.getItem(DB_KEY);
+    return raw ? JSON.parse(raw) : null;
+}
+
+function saveDB(db) {
+    localStorage.setItem(DB_KEY, JSON.stringify(db));
+}
+
+// Creates sample data the first time the app ever runs on a device
+function seedDB() {
+    const db = {
+        nextId: { users: 1, donors: 1, donations: 1, requests: 1 },
+        users: [],
+        donors: [],
+        donations: [],
+        requests: []
+    };
+
+    // NOTE: passwords are stored in plain text here to keep the code simple
+    // for a student project. A real app would hash passwords (e.g. bcrypt).
+
+    db.users.push({ id: db.nextId.users++, name: "Admin User", email: "admin@bloodapp.com", password: "admin123", role: "admin" });
+    db.users.push({ id: db.nextId.users++, name: "Ravi Kumar", email: "ravi@mail.com", password: "ravi123", role: "donor" });
+    db.users.push({ id: db.nextId.users++, name: "Sneha Sharma", email: "sneha@mail.com", password: "sneha123", role: "donor" });
+    db.users.push({ id: db.nextId.users++, name: "Amit Verma", email: "amit@mail.com", password: "amit123", role: "requester" });
+
+    db.donors.push({ id: db.nextId.donors++, user_id: 2, blood_group: "O+", city: "Delhi", phone: "9876543210", last_donation_date: "2026-08-01", is_available: true, loyalty_points: 20 });
+    db.donors.push({ id: db.nextId.donors++, user_id: 3, blood_group: "A-", city: "Mumbai", phone: "9123456780", last_donation_date: "2026-09-20", is_available: false, loyalty_points: 10 });
+
+    db.donations.push({ id: db.nextId.donations++, donor_id: 1, donation_date: "2026-08-01", units: 1, location: "City Hospital, Delhi", verified: true });
+    db.donations.push({ id: db.nextId.donations++, donor_id: 2, donation_date: "2026-09-20", units: 1, location: "Red Cross, Mumbai", verified: true });
+
+    saveDB(db);
+    return db;
+}
+
+function initDB() {
+    let db = getDB();
+    if (!db) db = seedDB();
+    return db;
+}
+
+// ---------- SESSION HELPERS ----------
+
+function getCurrentUser() {
+    const raw = localStorage.getItem("currentUser");
+    return raw ? JSON.parse(raw) : null;
+}
+
+function setCurrentUser(user) {
+    localStorage.setItem("currentUser", JSON.stringify(user));
+}
+
+function logout() {
+    localStorage.removeItem("currentUser");
+    showView("view-home");
+}
+
+// ---------- LOOKUP HELPERS ----------
+
+function findUserByEmail(db, email) {
+    return db.users.find(u => u.email.toLowerCase() === email.toLowerCase());
+}
+
+function findDonorByUserId(db, userId) {
+    return db.donors.find(d => d.user_id === userId);
+}
+
+// Eligibility: a donor must wait 90 days between donations
+function getEligibility(donor) {
+    if (!donor.last_donation_date) return { eligible: true, daysLeft: 0 };
+    const last = new Date(donor.last_donation_date);
+    const today = new Date();
+    const daysSince = Math.floor((today - last) / (1000 * 60 * 60 * 24));
+    if (daysSince >= 90) return { eligible: true, daysLeft: 0 };
+    return { eligible: false, daysLeft: 90 - daysSince };
+}
+
+// Finds available donors matching blood group + city, best loyalty points first
+function getMatchingDonors(db, bloodGroup, city) {
+    return db.donors
+        .filter(d => d.blood_group === bloodGroup && d.city.toLowerCase() === city.toLowerCase() && d.is_available)
+        .sort((a, b) => b.loyalty_points - a.loyalty_points)
+        .map(d => {
+            const u = db.users.find(u => u.id === d.user_id);
+            return { name: u.name, phone: d.phone, loyalty_points: d.loyalty_points };
+        });
+}
+
+// ---------- ACTIONS: REGISTRATION ----------
+
+function registerDonor(e) {
+    e.preventDefault();
+    const db = getDB();
+    const f = e.target;
+    const email = f.email.value.trim();
+
+    if (findUserByEmail(db, email)) {
+        showMessage("donor-register-msg", "That email is already registered.", "error");
+        return;
+    }
+
+    const user = { id: db.nextId.users++, name: f.name.value.trim(), email, password: f.password.value, role: "donor" };
+    db.users.push(user);
+
+    db.donors.push({
+        id: db.nextId.donors++,
+        user_id: user.id,
+        blood_group: f.blood_group.value,
+        city: f.city.value.trim(),
+        phone: f.phone.value.trim(),
+        last_donation_date: null,
+        is_available: true,
+        loyalty_points: 0
+    });
+
+    saveDB(db);
+    showMessage("donor-register-msg", "Registration successful! You can now log in.", "success");
+    f.reset();
+}
+
+function registerRecipient(e) {
+    e.preventDefault();
+    const db = getDB();
+    const f = e.target;
+    const email = f.email.value.trim();
+
+    if (findUserByEmail(db, email)) {
+        showMessage("recipient-register-msg", "That email is already registered.", "error");
+        return;
+    }
+
+    db.users.push({ id: db.nextId.users++, name: f.name.value.trim(), email, password: f.password.value, role: "requester" });
+    saveDB(db);
+    showMessage("recipient-register-msg", "Account created! You can now log in and request blood.", "success");
+    f.reset();
+}
+
+// ---------- ACTIONS: LOGIN ----------
+
+function login(e) {
+    e.preventDefault();
+    const db = getDB();
+    const f = e.target;
+    const email = f.email.value.trim();
+    const password = f.password.value;
+
+    const user = db.users.find(u => u.email.toLowerCase() === email.toLowerCase() && u.password === password);
+
+    if (!user) {
+        showMessage("login-msg", "Invalid email or password.", "error");
+        return;
+    }
+
+    setCurrentUser(user);
+    f.reset();
+
+    if (user.role === "donor") showView("view-donor-dashboard");
+    else if (user.role === "admin") showView("view-admin-dashboard");
+    else showView("view-recipient-dashboard");
+}
+
+// ---------- ACTIONS: DONOR ----------
+
+function logDonation(e) {
+    e.preventDefault();
+    const db = getDB();
+    const user = getCurrentUser();
+    const donor = findDonorByUserId(db, user.id);
+    const elig = getEligibility(donor);
+    if (!elig.eligible) return;
+
+    const location = e.target.location.value.trim();
+    const today = new Date().toISOString().split("T")[0];
+
+    db.donations.push({ id: db.nextId.donations++, donor_id: donor.id, donation_date: today, units: 1, location, verified: false });
+    donor.last_donation_date = today;
+    donor.is_available = false;
+
+    saveDB(db);
+    e.target.reset();
+    showMessage("donor-dash-msg", "Donation recorded. It will show as Pending Verification until admin confirms it - then you earn 10 loyalty points!", "success");
+    renderDonorDashboard();
+}
+
+// ---------- ACTIONS: RECIPIENT ----------
+
+function submitRequest(e) {
+    e.preventDefault();
+    const db = getDB();
+    const user = getCurrentUser();
+    const f = e.target;
+    const relatedEmail = f.related_donor_email.value.trim();
+
+    // Priority check: does the entered email belong to a donor with points > 0?
+    let priority = false;
+    if (relatedEmail) {
+        const relatedUser = findUserByEmail(db, relatedEmail);
+        if (relatedUser) {
+            const relatedDonor = findDonorByUserId(db, relatedUser.id);
+            if (relatedDonor && relatedDonor.loyalty_points > 0) priority = true;
+        }
+    }
+
+    db.requests.push({
+        id: db.nextId.requests++,
+        user_id: user.id,
+        requester_name: user.name,
+        requester_phone: f.phone.value.trim(),
+        blood_group: f.blood_group.value,
+        city: f.city.value.trim(),
+        related_donor_email: relatedEmail,
+        priority,
+        status: "pending",
+        request_date: new Date().toISOString()
+    });
+
+    saveDB(db);
+    f.reset();
+    showMessage("recipient-dash-msg",
+        priority ? "Request submitted with PRIORITY status!" : "Request submitted. Track its status below.",
+        "success");
+    renderRecipientDashboard();
+}
+
+function submitGuestRequest(e) {
+    e.preventDefault();
+    const db = getDB();
+    const f = e.target;
+
+    db.requests.push({
+        id: db.nextId.requests++,
+        user_id: null,
+        requester_name: f.name.value.trim(),
+        requester_phone: f.phone.value.trim(),
+        blood_group: f.blood_group.value,
+        city: f.city.value.trim(),
+        related_donor_email: "",
+        priority: false,
+        status: "pending",
+        request_date: new Date().toISOString()
+    });
+
+    saveDB(db);
+    f.reset();
+    showMessage("guest-request-msg", "Request submitted! Create a free account next time to track status and get priority.", "success");
+}
+
+// ---------- ACTIONS: ADMIN ----------
+
+function verifyDonation(donationId) {
+    const db = getDB();
+    const donation = db.donations.find(d => d.id === donationId);
+    donation.verified = true;
+    const donor = db.donors.find(d => d.id === donation.donor_id);
+    donor.loyalty_points += 10;
+    saveDB(db);
+    renderAdminDashboard();
+}
+
+function updateRequestStatus(requestId, status) {
+    const db = getDB();
+    const req = db.requests.find(r => r.id === requestId);
+    req.status = status;
+    saveDB(db);
+    renderAdminDashboard();
+}
+
+// ---------- UI HELPERS ----------
+
+function showMessage(elId, text, type) {
+    const el = document.getElementById(elId);
+    if (!el) return;
+    el.innerHTML = `<p class="message ${type}">${escapeHtml(text)}</p>`;
+    setTimeout(() => { el.innerHTML = ""; }, 5000);
+}
+
+function escapeHtml(str) {
+    const div = document.createElement("div");
+    div.textContent = str;
+    return div.innerHTML;
+}
+
+function statusClass(status) {
+    return "status-" + status;
+}
+
+
+/* ===================================================================
+   VIEW HANDLING
+   Shows/hides the right <div> section and fills it with fresh data.
+   =================================================================== */
+
+function showView(viewId) {
+    document.querySelectorAll(".view").forEach(v => v.classList.add("hidden"));
+    document.getElementById(viewId).classList.remove("hidden");
+    renderNavbar();
+
+    if (viewId === "view-donor-dashboard") renderDonorDashboard();
+    if (viewId === "view-recipient-dashboard") renderRecipientDashboard();
+    if (viewId === "view-admin-dashboard") renderAdminDashboard();
+    if (viewId === "view-reports") renderReports();
+    if (viewId === "view-search") renderSearch();
+
+    window.scrollTo(0, 0);
+}
+
+function renderNavbar() {
+    const user = getCurrentUser();
+    const linksEl = document.getElementById("navbar-links");
+
+    if (!user) {
+        linksEl.innerHTML = `
+            <a href="#" onclick="showView('view-home')">Home</a>
+            <a href="#" onclick="showView('view-search')">Search Donors</a>
+            <a href="#" onclick="showView('view-login')">Login</a>
+        `;
+    } else {
+        let dashView = "view-recipient-dashboard";
+        if (user.role === "donor") dashView = "view-donor-dashboard";
+        if (user.role === "admin") dashView = "view-admin-dashboard";
+
+        linksEl.innerHTML = `
+            <span>Hi, ${escapeHtml(user.name)}</span>
+            <a href="#" onclick="showView('${dashView}')">Dashboard</a>
+            ${user.role === "admin" ? `<a href="#" onclick="showView('view-reports')">Reports</a>` : ""}
+            <a href="#" onclick="showView('view-search')">Search</a>
+            <button onclick="logout()">Logout</button>
+        `;
+    }
+}
+
+// ---------- DONOR DASHBOARD ----------
+
+function renderDonorDashboard() {
+    const db = getDB();
+    const user = getCurrentUser();
+    if (!user || user.role !== "donor") { showView("view-login"); return; }
+
+    const donor = findDonorByUserId(db, user.id);
+    const elig = getEligibility(donor);
+
+    document.getElementById("donor-info").innerHTML = `
+        <p><strong>Blood Group:</strong> ${donor.blood_group}</p>
+        <p><strong>City:</strong> ${escapeHtml(donor.city)}</p>
+        <p><strong>Loyalty Points:</strong> ⭐ ${donor.loyalty_points}
+            ${donor.loyalty_points >= 30 ? `<strong style="color:#b30000;">(Priority Donor)</strong>` : ""}
+        </p>
+        <p><strong>Status:</strong>
+            ${elig.eligible
+                ? `<span class="available">Eligible to Donate</span>`
+                : `<span class="not-available">Not Eligible (${elig.daysLeft} days left)</span>`}
+        </p>
+    `;
+
+    document.getElementById("log-donation-form").classList.toggle("hidden", !elig.eligible);
+
+    const history = db.donations.filter(d => d.donor_id === donor.id).sort((a, b) => b.donation_date.localeCompare(a.donation_date));
+    const rows = history.map(d => `
+        <tr>
+            <td>${d.donation_date}</td>
+            <td>${d.units}</td>
+            <td>${escapeHtml(d.location)}</td>
+            <td>${d.verified ? `<span class="available">Verified (+10 pts)</span>` : `<span class="not-available">Pending Verification</span>`}</td>
+        </tr>
+    `).join("");
+    document.getElementById("donation-history").innerHTML = `
+        <table><tr><th>Date</th><th>Units</th><th>Location</th><th>Status</th></tr>${rows || "<tr><td colspan='4'>No donations yet.</td></tr>"}</table>
+    `;
+}
+
+// ---------- RECIPIENT DASHBOARD ----------
+
+function renderRecipientDashboard() {
+    const db = getDB();
+    const user = getCurrentUser();
+    if (!user || user.role !== "requester") { showView("view-login"); return; }
+
+    const myRequests = db.requests.filter(r => r.user_id === user.id).sort((a, b) => b.request_date.localeCompare(a.request_date));
+    const rows = myRequests.map(r => `
+        <tr class="${r.priority ? 'priority' : ''}">
+            <td>${r.blood_group}</td>
+            <td>${escapeHtml(r.city)}</td>
+            <td>${r.priority ? "⭐ Priority" : "-"}</td>
+            <td><span class="${statusClass(r.status)}">${capitalize(r.status)}</span></td>
+            <td>${new Date(r.request_date).toLocaleDateString()}</td>
+        </tr>
+    `).join("");
+    document.getElementById("my-requests").innerHTML = `
+        <table><tr><th>Blood Group</th><th>City</th><th>Priority</th><th>Status</th><th>Date</th></tr>
+        ${rows || "<tr><td colspan='5'>No requests yet.</td></tr>"}</table>
+    `;
+}
+
+// ---------- ADMIN DASHBOARD ----------
+
+function renderAdminDashboard() {
+    const db = getDB();
+    const user = getCurrentUser();
+    if (!user || user.role !== "admin") { showView("view-login"); return; }
+
+    document.getElementById("admin-stats").innerHTML = `
+        <table>
+            <tr><th>Total Donors</th><th>Total Donations</th><th>Available Now</th><th>Pending Requests</th></tr>
+            <tr>
+                <td>${db.donors.length}</td>
+                <td>${db.donations.length}</td>
+                <td>${db.donors.filter(d => d.is_available).length}</td>
+                <td>${db.requests.filter(r => r.status === "pending").length}</td>
+            </tr>
+        </table>
+    `;
+
+    // Pending donations
+    const pendingDonations = db.donations.filter(d => !d.verified);
+    const pdRows = pendingDonations.map(d => {
+        const donor = db.donors.find(dn => dn.id === d.donor_id);
+        const donorUser = db.users.find(u => u.id === donor.user_id);
+        return `
+            <tr>
+                <td>${escapeHtml(donorUser.name)}</td>
+                <td>${d.donation_date}</td>
+                <td>${d.units}</td>
+                <td>${escapeHtml(d.location)}</td>
+                <td><a href="#" onclick="verifyDonation(${d.id}); return false;">Verify (+10 pts)</a></td>
+            </tr>
+        `;
+    }).join("");
+    document.getElementById("pending-donations").innerHTML = `
+        <table><tr><th>Donor</th><th>Date</th><th>Units</th><th>Location</th><th>Action</th></tr>
+        ${pdRows || "<tr><td colspan='5'>Nothing pending - all caught up.</td></tr>"}</table>
+    `;
+
+    // All requests, priority first
+    const allRequests = [...db.requests].sort((a, b) => (b.priority - a.priority) || b.request_date.localeCompare(a.request_date));
+    const reqRows = allRequests.map(r => {
+        const matches = getMatchingDonors(db, r.blood_group, r.city);
+        const matchHtml = matches.length
+            ? matches.map(m => `${escapeHtml(m.name)} (${m.phone}) - ⭐${m.loyalty_points}`).join("<br>")
+            : "<em>No match yet</em>";
+
+        let actionHtml = "Done";
+        if (r.status === "pending") actionHtml = `<a href="#" onclick="updateRequestStatus(${r.id}, 'approved'); return false;">Approve</a>`;
+        else if (r.status === "approved") actionHtml = `<a href="#" onclick="updateRequestStatus(${r.id}, 'fulfilled'); return false;">Mark Fulfilled</a>`;
+
+        return `
+            <tr class="${r.priority ? 'priority' : ''}">
+                <td>${escapeHtml(r.requester_name)}</td>
+                <td>${escapeHtml(r.requester_phone)}</td>
+                <td>${r.blood_group}</td>
+                <td>${escapeHtml(r.city)}</td>
+                <td>${r.priority ? "⭐ Priority" : "-"}</td>
+                <td><span class="${statusClass(r.status)}">${capitalize(r.status)}</span></td>
+                <td>${matchHtml}</td>
+                <td>${actionHtml}</td>
+            </tr>
+        `;
+    }).join("");
+    document.getElementById("all-requests").innerHTML = `
+        <table>
+            <tr><th>Name</th><th>Phone</th><th>Group</th><th>City</th><th>Priority</th><th>Status</th><th>Matching Donors</th><th>Action</th></tr>
+            ${reqRows || "<tr><td colspan='8'>No requests yet.</td></tr>"}
+        </table>
+    `;
+}
+
+// ---------- REPORTS ----------
+
+function renderReports() {
+    const db = getDB();
+
+    const totalPoints = db.donors.reduce((sum, d) => sum + d.loyalty_points, 0);
+    const verifiedDonations = db.donations.filter(d => d.verified).length;
+
+    document.getElementById("report-overview").innerHTML = `
+        <table>
+            <tr><th>Total Users</th><th>Total Donors</th><th>Verified Donations</th><th>Total Loyalty Points</th></tr>
+            <tr><td>${db.users.length}</td><td>${db.donors.length}</td><td>${verifiedDonations}</td><td>${totalPoints}</td></tr>
+        </table>
+    `;
+
+    const statusCounts = { pending: 0, approved: 0, fulfilled: 0 };
+    let priorityCount = 0;
+    db.requests.forEach(r => { statusCounts[r.status]++; if (r.priority) priorityCount++; });
+
+    document.getElementById("report-requests").innerHTML = `
+        <table>
+            <tr><th>Pending</th><th>Approved</th><th>Fulfilled</th><th>Priority Requests</th></tr>
+            <tr><td>${statusCounts.pending}</td><td>${statusCounts.approved}</td><td>${statusCounts.fulfilled}</td><td>${priorityCount}</td></tr>
+        </table>
+    `;
+
+    const topDonors = [...db.donors].sort((a, b) => b.loyalty_points - a.loyalty_points).slice(0, 5);
+    const topRows = topDonors.map(d => {
+        const u = db.users.find(u => u.id === d.user_id);
+        return `<tr><td>${escapeHtml(u.name)}</td><td>${d.blood_group}</td><td>${escapeHtml(d.city)}</td><td>⭐ ${d.loyalty_points}</td></tr>`;
+    }).join("");
+    document.getElementById("report-leaderboard").innerHTML = `
+        <table><tr><th>Name</th><th>Blood Group</th><th>City</th><th>Points</th></tr>
+        ${topRows || "<tr><td colspan='4'>No donors yet.</td></tr>"}</table>
+    `;
+
+    const demand = {};
+    db.requests.forEach(r => { demand[r.blood_group] = (demand[r.blood_group] || 0) + 1; });
+    const demandRows = Object.entries(demand)
+        .sort((a, b) => b[1] - a[1])
+        .map(([bg, count]) => `<tr><td>${bg}</td><td>${count}</td></tr>`).join("");
+    document.getElementById("report-demand").innerHTML = `
+        <table><tr><th>Blood Group</th><th>Requests</th></tr>
+        ${demandRows || "<tr><td colspan='2'>No requests yet.</td></tr>"}</table>
+    `;
+}
+
+// ---------- SEARCH DONORS ----------
+
+function renderSearch(filterBloodGroup, filterCity) {
+    const db = getDB();
+    let results = db.donors.filter(d => d.is_available);
+
+    if (filterBloodGroup) results = results.filter(d => d.blood_group === filterBloodGroup);
+    if (filterCity) results = results.filter(d => d.city.toLowerCase().includes(filterCity.toLowerCase()));
+
+    const rows = results.map(d => {
+        const u = db.users.find(u => u.id === d.user_id);
+        return `<tr><td>${escapeHtml(u.name)}</td><td>${d.blood_group}</td><td>${escapeHtml(d.city)}</td><td>${d.phone}</td></tr>`;
+    }).join("");
+
+    document.getElementById("search-results").innerHTML = `
+        <table><tr><th>Name</th><th>Blood Group</th><th>City</th><th>Phone</th></tr>
+        ${rows || "<tr><td colspan='4'>No available donors found.</td></tr>"}</table>
+    `;
+}
+
+function handleSearchForm(e) {
+    e.preventDefault();
+    renderSearch(e.target.blood_group.value, e.target.city.value.trim());
+}
+
+function capitalize(s) {
+    return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+</script>
+<script>
+    // Start the app
+    initDB();
+    showView("view-home");
+
+    // ---- PWA: register service worker (makes the app installable + offline-capable) ----
+    if ("serviceWorker" in navigator) {
+        window.addEventListener("load", () => {
+            navigator.serviceWorker.register("service-worker.js").catch(err => console.log("SW registration failed:", err));
+        });
+    }
+
+    // ---- PWA: show a custom "Install" banner when the browser allows it ----
+    let deferredPrompt;
+    window.addEventListener("beforeinstallprompt", (e) => {
+        e.preventDefault();
+        deferredPrompt = e;
+        document.getElementById("install-banner").classList.remove("hidden");
+    });
+    document.getElementById("install-btn").addEventListener("click", async () => {
+        document.getElementById("install-banner").classList.add("hidden");
+        if (deferredPrompt) {
+            deferredPrompt.prompt();
+            await deferredPrompt.userChoice;
+            deferredPrompt = null;
+        }
+    });
+</script>
+
+</body>
+</html>
