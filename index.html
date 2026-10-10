@@ -221,7 +221,6 @@ th { background-color: var(--red); color: white; }
             <input type="password" name="password" placeholder="Password" required>
             <button type="submit">Login</button>
         </form>
-        <p class="muted">Test logins: admin@bloodapp.com / admin123, ravi@mail.com / ravi123, amit@mail.com / amit123</p>
     </div>
 </div>
 
@@ -428,17 +427,10 @@ function defaultData() {
 
     // NOTE: passwords are stored in plain text here to keep the code simple
     // for a student project. A real app would hash passwords (e.g. bcrypt).
+    // Only the admin account is pre-created. Donors and recipients register
+    // themselves through the app - no sample/demo people are added.
 
     seed.users.push({ id: seed.nextId.users++, name: "Admin User", email: "admin@bloodapp.com", password: "admin123", role: "admin" });
-    seed.users.push({ id: seed.nextId.users++, name: "Ravi Kumar", email: "ravi@mail.com", password: "ravi123", role: "donor" });
-    seed.users.push({ id: seed.nextId.users++, name: "Sneha Sharma", email: "sneha@mail.com", password: "sneha123", role: "donor" });
-    seed.users.push({ id: seed.nextId.users++, name: "Amit Verma", email: "amit@mail.com", password: "amit123", role: "requester" });
-
-    seed.donors.push({ id: seed.nextId.donors++, user_id: 2, blood_group: "O+", city: "Delhi", phone: "9876543210", last_donation_date: "2026-08-01", is_available: true, loyalty_points: 20 });
-    seed.donors.push({ id: seed.nextId.donors++, user_id: 3, blood_group: "A-", city: "Mumbai", phone: "9123456780", last_donation_date: "2026-09-20", is_available: false, loyalty_points: 10 });
-
-    seed.donations.push({ id: seed.nextId.donations++, donor_id: 1, donation_date: "2026-08-01", units: 1, location: "City Hospital, Delhi", verified: true });
-    seed.donations.push({ id: seed.nextId.donations++, donor_id: 2, donation_date: "2026-09-20", units: 1, location: "Red Cross, Mumbai", verified: true });
 
     return seed;
 }

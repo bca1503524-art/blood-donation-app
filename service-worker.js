@@ -1,7 +1,7 @@
 // Service Worker: caches the app's files so it can be "Installed" and
 // opened even without internet (data itself is stored separately via localStorage).
 
-const CACHE_NAME = "blood-donation-app-v3";
+const CACHE_NAME = "blood-donation-app-v4";
 const FILES_TO_CACHE = [
     "./",
     "./index.html",
