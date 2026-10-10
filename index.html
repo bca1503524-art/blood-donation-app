@@ -8,6 +8,24 @@
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
+
+<!-- Firebase (Firestore) - gives every device a shared, synced database -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script>
+  const firebaseConfig = {
+    apiKey: "AIzaSyBzmTkuBHPxKlYKBqMUh2Zg_ajrh0aefIQ",
+    authDomain: "blood-donation-app-b3796.firebaseapp.com",
+    projectId: "blood-donation-app-b3796",
+    storageBucket: "blood-donation-app-b3796.firebasestorage.app",
+    messagingSenderId: "1079804425995",
+    appId: "1:1079804425995:web:58149dc5be5a4d7872940e",
+    measurementId: "G-ZF8HESSM0X"
+  };
+  firebase.initializeApp(firebaseConfig);
+  const firestoreDB = firebase.firestore();
+</script>
+
 <style>
 :root {
     --red: #b30000;
@@ -106,6 +124,7 @@ th { background-color: var(--red); color: white; }
 .status-pending { color: #cc8b00; font-weight:bold; }
 .status-approved { color: #0066cc; font-weight:bold; }
 .status-fulfilled { color: green; font-weight:bold; }
+.status-rejected { color: #b30000; font-weight:bold; }
 
 .message { text-align: center; padding: 10px; margin-bottom: 10px; border-radius: 4px; }
 .success { background-color: #d4edda; color: #155724; }
@@ -127,6 +146,11 @@ th { background-color: var(--red); color: white; }
 </style>
 </head>
 <body>
+
+<div id="loading-screen" style="position:fixed;inset:0;background:#fdf2f2;display:flex;align-items:center;justify-content:center;flex-direction:column;z-index:999;font-family:Arial,sans-serif;">
+    <div style="font-size:40px;">🩸</div>
+    <div style="margin-top:10px;color:#b30000;font-weight:bold;">Connecting to database…</div>
+</div>
 
 <div id="install-banner" class="install-banner hidden">
     📲 Install this app on your device for quick access.
@@ -245,6 +269,21 @@ th { background-color: var(--red); color: white; }
         <div id="donor-dash-msg"></div>
         <div id="donor-info"></div>
 
+        <h3>Update My Details</h3>
+        <form onsubmit="updateDonorProfile(event)">
+            <select name="blood_group" required>
+                <option value="">Select Blood Group</option>
+                <option>A+</option><option>A-</option><option>B+</option><option>B-</option>
+                <option>AB+</option><option>AB-</option><option>O+</option><option>O-</option>
+            </select>
+            <input type="text" name="city" placeholder="City" required>
+            <input type="text" name="phone" placeholder="Phone Number" required>
+            <label style="display:block;margin:8px 0;">
+                <input type="checkbox" name="is_available" style="width:auto;"> Available to donate right now
+            </label>
+            <button type="submit">Save Details</button>
+        </form>
+
         <div id="log-donation-form">
             <h3>Log a New Donation</h3>
             <form onsubmit="logDonation(event)">
@@ -283,11 +322,52 @@ th { background-color: var(--red); color: white; }
 <div id="view-admin-dashboard" class="view hidden">
     <div class="container wide">
         <h2>Admin Dashboard</h2>
+        <div id="admin-dash-msg"></div>
         <div id="admin-stats"></div>
         <h3>Donations Awaiting Verification</h3>
         <div id="pending-donations"></div>
         <h3>All Blood Requests</h3>
         <div id="all-requests"></div>
+        <h3>Manage Donor Records</h3>
+        <div id="manage-donors"></div>
+        <h3>Manage Recipient Records</h3>
+        <div id="manage-recipients"></div>
+    </div>
+</div>
+
+<!-- ============ ADMIN: EDIT DONOR ============ -->
+<div id="view-edit-donor" class="view hidden">
+    <div class="container">
+        <h2>Edit Donor Record</h2>
+        <div id="edit-donor-msg"></div>
+        <form onsubmit="saveEditedDonor(event)">
+            <input type="hidden" name="donor_id">
+            <input type="text" name="name" placeholder="Full Name" required>
+            <select name="blood_group" required>
+                <option value="">Select Blood Group</option>
+                <option>A+</option><option>A-</option><option>B+</option><option>B-</option>
+                <option>AB+</option><option>AB-</option><option>O+</option><option>O-</option>
+            </select>
+            <input type="text" name="city" placeholder="City" required>
+            <input type="text" name="phone" placeholder="Phone Number" required>
+            <button type="submit">Save Changes</button>
+            <button type="button" onclick="showView('view-admin-dashboard')">Cancel</button>
+        </form>
+    </div>
+</div>
+
+<!-- ============ ADMIN: EDIT RECIPIENT ============ -->
+<div id="view-edit-recipient" class="view hidden">
+    <div class="container">
+        <h2>Edit Recipient Record</h2>
+        <div id="edit-recipient-msg"></div>
+        <form onsubmit="saveEditedRecipient(event)">
+            <input type="hidden" name="user_id">
+            <input type="text" name="name" placeholder="Full Name" required>
+            <input type="email" name="email" placeholder="Email" required>
+            <button type="submit">Save Changes</button>
+            <button type="button" onclick="showView('view-admin-dashboard')">Cancel</button>
+        </form>
     </div>
 </div>
 
@@ -313,22 +393,32 @@ th { background-color: var(--red); color: white; }
    No PHP / MySQL needed - this runs entirely on the device.
    =================================================================== */
 
-const DB_KEY = "bloodAppDB";
+// ---------- DATABASE HELPERS (now backed by Firebase Firestore) ----------
+// All donor/request/donation data lives in ONE shared document in the cloud,
+// so every phone running this app sees the same data in real time.
 
-// ---------- DATABASE HELPERS ----------
+const FIRESTORE_COLLECTION = "bloodapp";
+const FIRESTORE_DOC = "sharedData";
+const dbDocRef = firestoreDB.collection(FIRESTORE_COLLECTION).doc(FIRESTORE_DOC);
 
+let db = null; // in-memory cache of the shared database (kept in sync with Firestore)
+
+// Synchronous getter - the rest of the app's code is unchanged and still
+// calls getDB() expecting an instant result, so we just hand back the cache.
 function getDB() {
-    const raw = localStorage.getItem(DB_KEY);
-    return raw ? JSON.parse(raw) : null;
+    return db;
 }
 
-function saveDB(db) {
-    localStorage.setItem(DB_KEY, JSON.stringify(db));
+// Updates the cache immediately (so the UI feels instant) AND pushes the
+// change up to Firestore in the background so every other device gets it.
+function saveDB(newDb) {
+    db = newDb;
+    dbDocRef.set(db).catch(err => console.error("Firestore save failed:", err));
 }
 
-// Creates sample data the first time the app ever runs on a device
-function seedDB() {
-    const db = {
+// Creates sample data the first time the app ever runs for this project
+function defaultData() {
+    const seed = {
         nextId: { users: 1, donors: 1, donations: 1, requests: 1 },
         users: [],
         donors: [],
@@ -339,25 +429,52 @@ function seedDB() {
     // NOTE: passwords are stored in plain text here to keep the code simple
     // for a student project. A real app would hash passwords (e.g. bcrypt).
 
-    db.users.push({ id: db.nextId.users++, name: "Admin User", email: "admin@bloodapp.com", password: "admin123", role: "admin" });
-    db.users.push({ id: db.nextId.users++, name: "Ravi Kumar", email: "ravi@mail.com", password: "ravi123", role: "donor" });
-    db.users.push({ id: db.nextId.users++, name: "Sneha Sharma", email: "sneha@mail.com", password: "sneha123", role: "donor" });
-    db.users.push({ id: db.nextId.users++, name: "Amit Verma", email: "amit@mail.com", password: "amit123", role: "requester" });
+    seed.users.push({ id: seed.nextId.users++, name: "Admin User", email: "admin@bloodapp.com", password: "admin123", role: "admin" });
+    seed.users.push({ id: seed.nextId.users++, name: "Ravi Kumar", email: "ravi@mail.com", password: "ravi123", role: "donor" });
+    seed.users.push({ id: seed.nextId.users++, name: "Sneha Sharma", email: "sneha@mail.com", password: "sneha123", role: "donor" });
+    seed.users.push({ id: seed.nextId.users++, name: "Amit Verma", email: "amit@mail.com", password: "amit123", role: "requester" });
 
-    db.donors.push({ id: db.nextId.donors++, user_id: 2, blood_group: "O+", city: "Delhi", phone: "9876543210", last_donation_date: "2026-08-01", is_available: true, loyalty_points: 20 });
-    db.donors.push({ id: db.nextId.donors++, user_id: 3, blood_group: "A-", city: "Mumbai", phone: "9123456780", last_donation_date: "2026-09-20", is_available: false, loyalty_points: 10 });
+    seed.donors.push({ id: seed.nextId.donors++, user_id: 2, blood_group: "O+", city: "Delhi", phone: "9876543210", last_donation_date: "2026-08-01", is_available: true, loyalty_points: 20 });
+    seed.donors.push({ id: seed.nextId.donors++, user_id: 3, blood_group: "A-", city: "Mumbai", phone: "9123456780", last_donation_date: "2026-09-20", is_available: false, loyalty_points: 10 });
 
-    db.donations.push({ id: db.nextId.donations++, donor_id: 1, donation_date: "2026-08-01", units: 1, location: "City Hospital, Delhi", verified: true });
-    db.donations.push({ id: db.nextId.donations++, donor_id: 2, donation_date: "2026-09-20", units: 1, location: "Red Cross, Mumbai", verified: true });
+    seed.donations.push({ id: seed.nextId.donations++, donor_id: 1, donation_date: "2026-08-01", units: 1, location: "City Hospital, Delhi", verified: true });
+    seed.donations.push({ id: seed.nextId.donations++, donor_id: 2, donation_date: "2026-09-20", units: 1, location: "Red Cross, Mumbai", verified: true });
 
-    saveDB(db);
-    return db;
+    return seed;
 }
 
-function initDB() {
-    let db = getDB();
-    if (!db) db = seedDB();
-    return db;
+// Loads the shared data from Firestore (once) before the app starts.
+// If this is the very first time anyone has opened the app, it seeds it.
+async function initDB() {
+    const snap = await dbDocRef.get();
+    if (snap.exists) {
+        db = snap.data();
+    } else {
+        db = defaultData();
+        await dbDocRef.set(db);
+    }
+
+    // Live sync: whenever ANY device changes the data, update this device's
+    // view automatically (without needing a manual refresh).
+    dbDocRef.onSnapshot(snap => {
+        if (snap.exists) {
+            db = snap.data();
+            const current = document.querySelector(".view:not(.hidden)");
+            if (current) renderCurrentView();
+        }
+    });
+}
+
+// Re-renders whichever screen is currently open, using the freshest data.
+// Used after a real-time update arrives from another device.
+function renderCurrentView() {
+    const current = document.querySelector(".view:not(.hidden)");
+    if (!current) return;
+    const id = current.id;
+    if (id === "view-donor-dashboard") renderDonorDashboard();
+    else if (id === "view-recipient-dashboard") renderRecipientDashboard();
+    else if (id === "view-admin-dashboard") renderAdminDashboard();
+    else if (id === "view-reports") renderReports();
 }
 
 // ---------- SESSION HELPERS ----------
@@ -457,6 +574,23 @@ function registerRecipient(e) {
 }
 
 // ---------- ACTIONS: LOGIN ----------
+
+function updateDonorProfile(e) {
+    e.preventDefault();
+    const db = getDB();
+    const user = getCurrentUser();
+    const donor = findDonorByUserId(db, user.id);
+    const f = e.target;
+
+    donor.blood_group = f.blood_group.value;
+    donor.city = f.city.value.trim();
+    donor.phone = f.phone.value.trim();
+    donor.is_available = f.is_available.checked;
+
+    saveDB(db);
+    showMessage("donor-dash-msg", "Your details have been updated.", "success");
+    renderDonorDashboard();
+}
 
 function login(e) {
     e.preventDefault();
@@ -675,6 +809,15 @@ function renderDonorDashboard() {
 
     document.getElementById("log-donation-form").classList.toggle("hidden", !elig.eligible);
 
+    // Pre-fill the "Update My Details" form with the donor's current info
+    const profileForm = document.querySelector('#view-donor-dashboard form[onsubmit="updateDonorProfile(event)"]');
+    if (profileForm) {
+        profileForm.blood_group.value = donor.blood_group;
+        profileForm.city.value = donor.city;
+        profileForm.phone.value = donor.phone;
+        profileForm.is_available.checked = donor.is_available;
+    }
+
     const history = db.donations.filter(d => d.donor_id === donor.id).sort((a, b) => b.donation_date.localeCompare(a.donation_date));
     const rows = history.map(d => `
         <tr>
@@ -760,8 +903,15 @@ function renderAdminDashboard() {
             : "<em>No match yet</em>";
 
         let actionHtml = "Done";
-        if (r.status === "pending") actionHtml = `<a href="#" onclick="updateRequestStatus(${r.id}, 'approved'); return false;">Approve</a>`;
-        else if (r.status === "approved") actionHtml = `<a href="#" onclick="updateRequestStatus(${r.id}, 'fulfilled'); return false;">Mark Fulfilled</a>`;
+        if (r.status === "pending") {
+            actionHtml = `
+                <a href="#" onclick="updateRequestStatus(${r.id}, 'approved'); return false;">Approve</a>
+                &nbsp;|&nbsp;
+                <a href="#" style="color:#b30000;" onclick="updateRequestStatus(${r.id}, 'rejected'); return false;">Reject</a>
+            `;
+        } else if (r.status === "approved") {
+            actionHtml = `<a href="#" onclick="updateRequestStatus(${r.id}, 'fulfilled'); return false;">Mark Fulfilled</a>`;
+        }
 
         return `
             <tr class="${r.priority ? 'priority' : ''}">
@@ -782,6 +932,141 @@ function renderAdminDashboard() {
             ${reqRows || "<tr><td colspan='8'>No requests yet.</td></tr>"}
         </table>
     `;
+
+    // ---- Manage Donor Records ----
+    const donorRows = db.donors.map(d => {
+        const u = db.users.find(u => u.id === d.user_id);
+        return `
+            <tr>
+                <td>${escapeHtml(u ? u.name : "(unknown)")}</td>
+                <td>${d.blood_group}</td>
+                <td>${escapeHtml(d.city)}</td>
+                <td>${escapeHtml(d.phone)}</td>
+                <td>⭐ ${d.loyalty_points}</td>
+                <td>${d.is_available ? `<span class="available">Yes</span>` : `<span class="not-available">No</span>`}</td>
+                <td>
+                    <a href="#" onclick="editDonorRecord(${d.id}); return false;">Edit</a>
+                    &nbsp;|&nbsp;
+                    <a href="#" style="color:#b30000;" onclick="deleteDonorRecord(${d.id}); return false;">Delete</a>
+                </td>
+            </tr>
+        `;
+    }).join("");
+    document.getElementById("manage-donors").innerHTML = `
+        <table>
+            <tr><th>Name</th><th>Group</th><th>City</th><th>Phone</th><th>Points</th><th>Available</th><th>Action</th></tr>
+            ${donorRows || "<tr><td colspan='7'>No donors registered yet.</td></tr>"}
+        </table>
+    `;
+
+    // ---- Manage Recipient Records ----
+    const recipients = db.users.filter(u => u.role === "requester");
+    const recipientRows = recipients.map(u => {
+        const requestCount = db.requests.filter(r => r.user_id === u.id).length;
+        return `
+            <tr>
+                <td>${escapeHtml(u.name)}</td>
+                <td>${escapeHtml(u.email)}</td>
+                <td>${requestCount}</td>
+                <td>
+                    <a href="#" onclick="editRecipientRecord(${u.id}); return false;">Edit</a>
+                    &nbsp;|&nbsp;
+                    <a href="#" style="color:#b30000;" onclick="deleteRecipientRecord(${u.id}); return false;">Delete</a>
+                </td>
+            </tr>
+        `;
+    }).join("");
+    document.getElementById("manage-recipients").innerHTML = `
+        <table>
+            <tr><th>Name</th><th>Email</th><th>Requests Made</th><th>Action</th></tr>
+            ${recipientRows || "<tr><td colspan='4'>No recipients registered yet.</td></tr>"}
+        </table>
+    `;
+}
+
+// ---------- ADMIN: MANAGE DONOR RECORDS ----------
+
+function editDonorRecord(donorId) {
+    const db = getDB();
+    const donor = db.donors.find(d => d.id === donorId);
+    const u = db.users.find(u => u.id === donor.user_id);
+
+    showView("view-edit-donor");
+    const f = document.querySelector('#view-edit-donor form');
+    f.donor_id.value = donor.id;
+    f.name.value = u ? u.name : "";
+    f.blood_group.value = donor.blood_group;
+    f.city.value = donor.city;
+    f.phone.value = donor.phone;
+}
+
+function saveEditedDonor(e) {
+    e.preventDefault();
+    const db = getDB();
+    const f = e.target;
+    const donor = db.donors.find(d => d.id === parseInt(f.donor_id.value));
+    const u = db.users.find(u => u.id === donor.user_id);
+
+    if (u) u.name = f.name.value.trim();
+    donor.blood_group = f.blood_group.value;
+    donor.city = f.city.value.trim();
+    donor.phone = f.phone.value.trim();
+
+    saveDB(db);
+    showView("view-admin-dashboard");
+}
+
+function deleteDonorRecord(donorId) {
+    if (!confirm("Delete this donor record? This cannot be undone.")) return;
+    const db = getDB();
+    const donor = db.donors.find(d => d.id === donorId);
+    db.donors = db.donors.filter(d => d.id !== donorId);
+    db.donations = db.donations.filter(d => d.donor_id !== donorId);
+    db.users = db.users.filter(u => u.id !== donor.user_id);
+    saveDB(db);
+    renderAdminDashboard();
+}
+
+// ---------- ADMIN: MANAGE RECIPIENT RECORDS ----------
+
+function editRecipientRecord(userId) {
+    const db = getDB();
+    const u = db.users.find(u => u.id === userId);
+
+    showView("view-edit-recipient");
+    const f = document.querySelector('#view-edit-recipient form');
+    f.user_id.value = u.id;
+    f.name.value = u.name;
+    f.email.value = u.email;
+}
+
+function saveEditedRecipient(e) {
+    e.preventDefault();
+    const db = getDB();
+    const f = e.target;
+    const u = db.users.find(u => u.id === parseInt(f.user_id.value));
+
+    const newEmail = f.email.value.trim();
+    const emailTaken = db.users.find(other => other.id !== u.id && other.email.toLowerCase() === newEmail.toLowerCase());
+    if (emailTaken) {
+        showMessage("edit-recipient-msg", "That email is already used by another account.", "error");
+        return;
+    }
+
+    u.name = f.name.value.trim();
+    u.email = newEmail;
+
+    saveDB(db);
+    showView("view-admin-dashboard");
+}
+
+function deleteRecipientRecord(userId) {
+    if (!confirm("Delete this recipient record? This cannot be undone.")) return;
+    const db = getDB();
+    db.users = db.users.filter(u => u.id !== userId);
+    db.requests = db.requests.filter(r => r.user_id !== userId);
+    saveDB(db);
+    renderAdminDashboard();
 }
 
 // ---------- REPORTS ----------
@@ -862,9 +1147,15 @@ function capitalize(s) {
 
 </script>
 <script>
-    // Start the app
-    initDB();
-    showView("view-home");
+    // Start the app: wait for the shared cloud database to load first
+    initDB().then(() => {
+        document.getElementById("loading-screen").style.display = "none";
+        showView("view-home");
+    }).catch(err => {
+        console.error("Could not connect to Firestore:", err);
+        document.getElementById("loading-screen").innerHTML =
+            "<div style='color:#b30000;text-align:center;padding:20px;'>⚠️ Could not connect to the database.<br>Check your internet connection and reload.</div>";
+    });
 
     // ---- PWA: register service worker (makes the app installable + offline-capable) ----
     if ("serviceWorker" in navigator) {
