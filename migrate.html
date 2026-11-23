@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Migrate old app data</title>
+<link rel="stylesheet" href="style.css">
+<script src="https://www.gstatic.com/firebase10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebase10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebase10.12.2/firebase-firestore-compat.js"></script>
+</head>
+<body>
+<main>
+  <h2>Move old app data into the new app</h2>
+  <p class="lead">Run this once. It copies every donor, recipient, donation and request from the old app into the new structure. Enter your new admin login to start.</p>
+  <form id="form">
+    <label>Admin email <input type="email" id="email" required></label>
+    <label>Admin password <input type="password" id="pass" required></label>
+    <button type="submit" id="go">Start migration</button>
+  </form>
+  <pre id="log" style="white-space:pre-wrap; background:#fff; border:1px solid var(--line); padding:12px; margin-top:20px; min-height:80px;"></pre>
+</main>
+
+<script src="firebase-config.js"></script>
+<script>
+// migrate.js (one-time use)
+// Old app: one document  bloodapp/sharedData  with arrays users, donors, donations, requests.
+// New app: separate collections, and logins handled by Firebase Authentication.
+
+const logBox = document.getElementById("log");
+function log(text) { logBox.textContent += text + "\n"; }
+
+function randomPassword() {
+  return "Tmp-" + Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+}
+
+async function migrate(adminEmail, adminPass) {
+  // STEP 1: log in as admin and read the old data into memory
+  log("Logging in as admin...");
+  const adminCred = await auth.signInWithEmailAndPassword(adminEmail, adminPass);
+  const adminDoc = await db.collection("users").doc(adminCred.user.uid).get();
+  if (!adminDoc.exists || adminDoc.data().role !== "admin") {
+    log("STOP: this account is not an admin. Set role to admin in Firestore first.");
+    return;
+  }
+  const oldSnap = await db.collection("bloodapp").doc("sharedData").get();
+  if (!oldSnap.exists) { log("STOP: old data (bloodapp/sharedData) was not found."); return; }
+  const old = oldSnap.data();
+  const oldUsers = (old.users || []).filter(u => u.role !== "admin");
+  log("Found " + oldUsers.length + " people, " + (old.donations || []).length +
+      " donations, " + (old.requests || []).length + " requests.\n");
+
+  // STEP 2: create a login + profile for every old person
+  // (creating an account signs that person in, so we sign out after each one)
+  const uidOf = {};      // old user id -> new Firebase uid
+  for (const u of oldUsers) {
+    const role = u.role === "donor" ? "donor" : "recipient";
+    let uid;
+    let needsReset = false;
+    try {
+      // Firebase needs 6+ characters. If the old password is shorter, use a random one and email a reset link.
+      let pw = u.password;
+      if (!pw || pw.length < 6) { pw = randomPassword(); needsReset = true; }
+      const cred = await auth.createUserWithEmailAndPassword(u.email, pw);
+      uid = cred.user.uid;
+    } catch (e) {
+      if (e.code === "auth/email-already-in-use") {
+        try {
+          const cred = await auth.signInWithEmailAndPassword(u.email, u.password);
+          uid = cred.user.uid;
+        } catch (e2) {
+          log("SKIPPED " + u.email + " (already registered in the new app with a different password)");
+          continue;
+        }
+      } else { log("FAILED " + u.email + ": " + e.message); continue; }
+    }
+
+    uidOf[u.id] = uid;
+    const userRef = db.collection("users").doc(uid);
+    if (!(await userRef.get()).exists) {
+      await userRef.set({ name: u.name, email: u.email, role: role, createdAt: new Date().toISOString(), migrated: true });
+      if (role === "donor") {
+        const od = (old.donors || []).find(d => d.user_id === u.id);
+        if (od) {
+          await db.collection("donors").doc(uid).set({
+            uid: uid, name: u.name, bloodGroup: od.blood_group || "", city: od.city || "",
+            phone: od.phone || "", lastDonationDate: "", available: od.is_available !== false, points: 0
+          });
+        }
+      }
+    }
+    await auth.signOut();
+    if (needsReset) { await auth.sendPasswordResetEmail(u.email); }
+    log("OK  " + u.name + " (" + role + ")" + (needsReset ? " - reset email sent (old password was too short)" : ""));
+  }
+
+  // STEP 3: log in as admin again and copy points, donations and requests
+  log("\nLogging in as admin again...");
+  await auth.signInWithEmailAndPassword(adminEmail, adminPass);
+
+  for (const od of (old.donors || [])) {
+    const uid = uidOf[od.user_id];
+    if (!uid) continue;
+    try {
+      await db.collection("donors").doc(uid).update({
+        points: od.loyalty_points || 0,
+        lastDonationDate: od.last_donation_date || ""
+      });
+    } catch (e) { log("Could not update points for donor " + od.id + ": " + e.message); }
+  }
+  log("Donor points and last donation dates copied.");
+
+  let donCount = 0;
+  for (const d of (old.donations || [])) {
+    const odonor = (old.donors || []).find(x => x.id === d.donor_id);
+    const uid = odonor && uidOf[odonor.user_id];
+    if (!uid) continue;
+    const owner = oldUsers.find(u => u.id === odonor.user_id);
+    // fixed document id, so running the migration twice does not create duplicates
+    await db.collection("donations").doc("old-don-" + d.id).set({
+      donorId: uid, donorName: owner ? owner.name : "", date: d.donation_date || "",
+      units: d.units || 1, place: d.location || "", verified: !!d.verified
+    });
+    donCount++;
+  }
+  log(donCount + " donations copied.");
+
+  let reqCount = 0;
+  for (const r of (old.requests || [])) {
+    const uid = uidOf[r.user_id];
+    if (!uid) continue;
+    await db.collection("requests").doc("old-req-" + r.id).set({
+      requesterId: uid, requesterName: r.requester_name || "", requesterPhone: r.requester_phone || "",
+      bloodGroup: r.blood_group || "", units: 1, city: r.city || "", hospital: "Not given (old app)",
+      status: r.status || "pending", createdAt: r.request_date || new Date().toISOString()
+    });
+    reqCount++;
+  }
+  log(reqCount + " requests copied.");
+  log("\nDONE. Open the main app to check everything.");
+}
+
+document.getElementById("form").addEventListener("submit", async function (e) {
+  e.preventDefault();
+  document.getElementById("go").disabled = true;
+  logBox.textContent = "";
+  try { await migrate(document.getElementById("email").value.trim(), document.getElementById("pass").value); }
+  catch (err) { log("ERROR: " + err.message); }
+  document.getElementById("go").disabled = false;
+});
+</script>
+</body>
+</html>

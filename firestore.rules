@@ -1,0 +1,63 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions used below
+    function signedIn() {
+      return request.auth != null;
+    }
+    function isAdmin() {
+      return signedIn() &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // USERS: a person can read only their own record. Admin can read all.
+    // Nobody can make themselves admin while signing up.
+    match /users/{uid} {
+      allow read: if signedIn() && (request.auth.uid == uid || isAdmin());
+      allow create: if signedIn() && request.auth.uid == uid
+                    && request.resource.data.role in ['donor', 'recipient'];
+      allow update: if isAdmin() ||
+                    (request.auth.uid == uid && request.resource.data.role == resource.data.role);
+      allow delete: if isAdmin();
+    }
+
+    // DONORS: any logged-in user can search donors.
+    // A donor can edit their own details, but NOT their points or last donation date.
+    match /donors/{uid} {
+      allow read: if signedIn();
+      allow create: if signedIn() && request.auth.uid == uid && request.resource.data.points == 0;
+      allow update: if isAdmin() ||
+                    (request.auth.uid == uid
+                     && request.resource.data.points == resource.data.points
+                     && request.resource.data.lastDonationDate == resource.data.lastDonationDate);
+      allow delete: if isAdmin();
+    }
+
+    // REQUESTS: any logged-in user can read. Only the owner can create (as pending). Only admin changes status.
+    match /requests/{id} {
+      allow read: if signedIn();
+      allow create: if isAdmin() ||
+                    (signedIn()
+                     && request.resource.data.requesterId == request.auth.uid
+                     && request.resource.data.status == 'pending');
+      allow update, delete: if isAdmin();
+    }
+
+    // DONATIONS: a donor sees only their own. Admin sees all and verifies.
+    match /donations/{id} {
+      allow read: if signedIn() && (resource.data.donorId == request.auth.uid || isAdmin());
+      allow create: if isAdmin() ||
+                    (signedIn()
+                     && request.resource.data.donorId == request.auth.uid
+                     && request.resource.data.verified == false);
+      allow update, delete: if isAdmin();
+    }
+
+    // OLD APP DATA: only the admin can read it. Used once by migrate.html.
+    // After migrating, you can delete the old data and this block.
+    match /bloodapp/{doc} {
+      allow read: if isAdmin();
+    }
+  }
+}
