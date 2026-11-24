@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Blood Donation Management System</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="stylesheet" href="style.css">
+
+<!-- Firebase libraries (loaded from Google's CDN) -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+</head>
+<body>
+
+<header class="navbar">
+  <strong class="brand">Blood Donation System</strong>
+  <nav id="nav-links"></nav>
+</header>
+
+<div id="message" class="message hidden"></div>
+
+<main>
+
+  <!-- HOME -->
+  <section id="view-home" class="view hero">
+    <div class="hero-icon">
+      <svg viewBox="0 0 24 24" width="44" height="44" aria-hidden="true"><path fill="#fff" d="M12 2C12 2 5 10 5 15a7 7 0 0 0 14 0c0-5-7-13-7-13z"/></svg>
+    </div>
+    <h1>Blood Donation<br>Management System</h1>
+    <div class="hero-buttons">
+      <button onclick="showView('view-register')">Create account</button>
+      <button class="light" onclick="showView('view-login')">Log in</button>
+    </div>
+  </section>
+
+  <!-- LOGIN -->
+  <section id="view-login" class="view hidden">
+    <h2>Log in</h2>
+    <form id="login-form">
+      <label>Email <input type="email" id="login-email" required></label>
+      <label>Password <input type="password" id="login-password" required></label>
+      <button type="submit">Log in</button>
+    </form>
+    <p><a href="#" onclick="showView('view-forgot'); return false;">Forgot password?</a></p>
+  </section>
+
+  <!-- FORGOT PASSWORD -->
+  <section id="view-forgot" class="view hidden">
+    <h2>Reset password</h2>
+    <p class="lead">Enter your email. We will send you a link to set a new password.</p>
+    <form id="forgot-form">
+      <label>Email <input type="email" id="forgot-email" required></label>
+      <button type="submit">Send reset link</button>
+    </form>
+  </section>
+
+  <!-- REGISTER -->
+  <section id="view-register" class="view hidden">
+    <h2>Create account</h2>
+    <form id="register-form">
+      <label>I am a
+        <select id="reg-role">
+          <option value="donor">Donor (I want to donate blood)</option>
+          <option value="recipient">Recipient (I need blood)</option>
+        </select>
+      </label>
+      <label>Full name <input type="text" id="reg-name" required></label>
+      <label>Email <input type="email" id="reg-email" required></label>
+      <label>Password (at least 6 characters) <input type="password" id="reg-password" minlength="6" required></label>
+
+      <div id="donor-fields">
+        <label>Blood group
+          <select id="reg-blood">
+            <option value="">Select</option>
+            <option>A+</option><option>A-</option><option>B+</option><option>B-</option>
+            <option>AB+</option><option>AB-</option><option>O+</option><option>O-</option>
+          </select>
+        </label>
+        <label>City <input type="text" id="reg-city"></label>
+        <label>Phone <input type="tel" id="reg-phone"></label>
+      </div>
+      <button type="submit">Create account</button>
+    </form>
+  </section>
+
+  <!-- DONOR DASHBOARD -->
+  <section id="view-donor" class="view hidden">
+    <h2>Donor dashboard</h2>
+    <div id="donor-summary" class="cards"></div>
+
+    <h3>My details</h3>
+    <form id="donor-form">
+      <label>Blood group
+        <select id="d-blood">
+          <option>A+</option><option>A-</option><option>B+</option><option>B-</option>
+          <option>AB+</option><option>AB-</option><option>O+</option><option>O-</option>
+        </select>
+      </label>
+      <label>City <input type="text" id="d-city" required></label>
+      <label>Phone <input type="tel" id="d-phone" required></label>
+      <label class="check"><input type="checkbox" id="d-available"> I am available to donate</label>
+      <button type="submit">Save details</button>
+    </form>
+
+    <h3>Log a donation</h3>
+    <div id="donation-box"></div>
+
+    <h3>My donation history</h3>
+    <div id="donation-history"></div>
+  </section>
+
+  <!-- RECIPIENT DASHBOARD -->
+  <section id="view-recipient" class="view hidden">
+    <h2>Recipient dashboard</h2>
+
+    <h3>Request blood</h3>
+    <form id="request-form">
+      <label>Blood group needed
+        <select id="r-blood" required>
+          <option value="">Select</option>
+          <option>A+</option><option>A-</option><option>B+</option><option>B-</option>
+          <option>AB+</option><option>AB-</option><option>O+</option><option>O-</option>
+        </select>
+      </label>
+      <label>Units needed <input type="number" id="r-units" min="1" max="10" value="1" required></label>
+      <label>City <input type="text" id="r-city" required></label>
+      <label>Hospital <input type="text" id="r-hospital" required></label>
+      <button type="submit">Send request</button>
+    </form>
+
+    <h3>My requests</h3>
+    <div id="my-requests"></div>
+  </section>
+
+  <!-- SEARCH DONORS -->
+  <section id="view-search" class="view hidden">
+    <h2>Search donors</h2>
+    <form id="search-form" class="row">
+      <select id="s-blood">
+        <option value="">All blood groups</option>
+        <option>A+</option><option>A-</option><option>B+</option><option>B-</option>
+        <option>AB+</option><option>AB-</option><option>O+</option><option>O-</option>
+      </select>
+      <input type="text" id="s-city" placeholder="City (optional)">
+      <button type="submit">Search</button>
+    </form>
+    <div id="search-results"></div>
+  </section>
+
+  <!-- ADMIN DASHBOARD -->
+  <section id="view-admin" class="view hidden">
+    <h2>Admin dashboard</h2>
+    <div id="admin-stats" class="cards"></div>
+    <h3>Donations waiting for verification</h3>
+    <div id="admin-donations"></div>
+    <h3>Blood requests</h3>
+    <div id="admin-requests"></div>
+    <h3>Donors</h3>
+    <div id="admin-donors"></div>
+    <h3>Recipients</h3>
+    <div id="admin-recipients"></div>
+  </section>
+
+</main>
+
+
+<!-- Our own code. Order matters: config first, app.js last. -->
+<script src="firebase-config.js"></script>
+<script src="auth.js"></script>
+<script src="db.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
